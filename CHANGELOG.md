@@ -2,6 +2,21 @@
 
 All notable changes to the Mealie MCP Server.
 
+## [Unreleased]
+
+### ✨ New Features
+
+- `patch_recipe` now accepts `org_url` (maps to Mealie's `orgURL` field) so a
+  recipe's original source link can be set/updated without a separate call.
+- `patch_recipe` now accepts `image_url`, which scrapes and sets the recipe's
+  image (via the same endpoint as `set_recipe_image_from_url`) as part of a
+  single patch call alongside other field updates.
+- `create_recipe` and `update_recipe` now accept titled/grouped instruction
+  steps. Each item in `instructions` may be a plain string (unchanged,
+  backward compatible) or a dict with a required `"text"` key and optional
+  `"title"`/`"summary"` keys, e.g.
+  `{"title": "For the crust", "text": "Mix flour, butter, and salt."}`.
+
 ## [Unreleased] - 2025-01-05
 
 ### 🎉 Major Feature Additions

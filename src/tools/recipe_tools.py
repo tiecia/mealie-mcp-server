@@ -1,6 +1,6 @@
 import logging
 import traceback
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp.exceptions import ToolError
@@ -9,6 +9,49 @@ from mealie import MealieFetcher
 from models.recipe import Recipe, RecipeIngredient, RecipeInstruction
 
 logger = logging.getLogger("mealie-mcp")
+
+# An instruction step can be given as a plain string (backward compatible,
+# maps to just the instruction text) or as a dict with an optional "title"
+# and/or "summary" alongside the required "text", e.g.:
+#   "Preheat the oven to 350F."
+#   {"title": "For the crust", "text": "Mix flour, butter, and salt."}
+InstructionInput = Union[str, Dict[str, str]]
+
+
+def _build_instructions(instructions: List[InstructionInput]) -> List[RecipeInstruction]:
+    """Convert a list of plain strings and/or title/text dicts into RecipeInstruction objects.
+
+    Args:
+        instructions: Each item is either:
+            - a plain string, used directly as the step's text, or
+            - a dict with a required "text" key and optional "title"/"summary"
+              keys, used to create a titled/grouped instruction step.
+
+    Returns:
+        List[RecipeInstruction]: The parsed instruction steps, preserving order.
+    """
+    parsed: List[RecipeInstruction] = []
+    for i, item in enumerate(instructions):
+        if isinstance(item, str):
+            parsed.append(RecipeInstruction(text=item))
+        elif isinstance(item, dict):
+            if "text" not in item or not item["text"]:
+                raise ValueError(
+                    f"Instruction step {i} is missing required 'text' field: {item!r}"
+                )
+            parsed.append(
+                RecipeInstruction(
+                    text=item["text"],
+                    title=item.get("title"),
+                    summary=item.get("summary"),
+                )
+            )
+        else:
+            raise ValueError(
+                f"Instruction step {i} must be a string or a dict with a 'text' "
+                f"field, got {type(item).__name__}: {item!r}"
+            )
+    return parsed
 
 
 def register_recipe_tools(mcp: FastMCP, mealie: MealieFetcher) -> None:
@@ -138,14 +181,20 @@ def register_recipe_tools(mcp: FastMCP, mealie: MealieFetcher) -> None:
 
     @mcp.tool()
     def create_recipe(
-        name: str, ingredients: List[str], instructions: List[str]
+        name: str, ingredients: List[str], instructions: List[InstructionInput]
     ) -> Dict[str, Any]:
         """Create a new recipe
 
         Args:
             name: The name of the new recipe to be created.
             ingredients: A list of ingredients for the recipe include quantities and units.
-            instructions: A list of instructions for preparing the recipe.
+            instructions: A list of instructions for preparing the recipe. Each item
+                is either a plain string (the step's text), or a dict with a
+                required "text" key and an optional "title" (and/or "summary")
+                key to label/group that step, e.g.:
+                ["Preheat oven to 350F.",
+                 {"title": "For the crust", "text": "Mix flour, butter, and salt."},
+                 {"title": "For the filling", "text": "Whisk eggs and sugar."}]
 
         Returns:
             Dict[str, Any]: The created recipe details.
@@ -156,9 +205,7 @@ def register_recipe_tools(mcp: FastMCP, mealie: MealieFetcher) -> None:
             recipe_json = mealie.get_recipe(slug)
             recipe = Recipe.model_validate(recipe_json)
             recipe.recipeIngredient = [RecipeIngredient(note=i) for i in ingredients]
-            recipe.recipeInstructions = [
-                RecipeInstruction(text=i) for i in instructions
-            ]
+            recipe.recipeInstructions = _build_instructions(instructions)
             return mealie.update_recipe(slug, recipe.model_dump(exclude_none=True))
         except Exception as e:
             error_msg = f"Error creating recipe '{name}': {str(e)}"
@@ -172,14 +219,20 @@ def register_recipe_tools(mcp: FastMCP, mealie: MealieFetcher) -> None:
     def update_recipe(
         slug: str,
         ingredients: List[str],
-        instructions: List[str],
+        instructions: List[InstructionInput],
     ) -> Dict[str, Any]:
         """Replaces the ingredients and instructions of an existing recipe.
 
         Args:
             slug: The unique text identifier for the recipe to be updated.
             ingredients: A list of ingredients for the recipe include quantities and units.
-            instructions: A list of instructions for preparing the recipe.
+            instructions: A list of instructions for preparing the recipe. Each item
+                is either a plain string (the step's text), or a dict with a
+                required "text" key and an optional "title" (and/or "summary")
+                key to label/group that step, e.g.:
+                ["Preheat oven to 350F.",
+                 {"title": "For the crust", "text": "Mix flour, butter, and salt."},
+                 {"title": "For the filling", "text": "Whisk eggs and sugar."}]
 
         Returns:
             Dict[str, Any]: The updated recipe details.
@@ -189,9 +242,7 @@ def register_recipe_tools(mcp: FastMCP, mealie: MealieFetcher) -> None:
             recipe_json = mealie.get_recipe(slug)
             recipe = Recipe.model_validate(recipe_json)
             recipe.recipeIngredient = [RecipeIngredient(note=i) for i in ingredients]
-            recipe.recipeInstructions = [
-                RecipeInstruction(text=i) for i in instructions
-            ]
+            recipe.recipeInstructions = _build_instructions(instructions)
             return mealie.update_recipe(slug, recipe.model_dump(exclude_none=True))
         except Exception as e:
             error_msg = f"Error updating recipe '{slug}': {str(e)}"
@@ -208,6 +259,8 @@ def register_recipe_tools(mcp: FastMCP, mealie: MealieFetcher) -> None:
         description: Optional[str] = None,
         recipe_yield: Optional[str] = None,
         total_time: Optional[str] = None,
+        org_url: Optional[str] = None,
+        image_url: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Partially update a recipe (only updates provided fields).
 
@@ -217,6 +270,13 @@ def register_recipe_tools(mcp: FastMCP, mealie: MealieFetcher) -> None:
             description: New description for the recipe (optional)
             recipe_yield: New yield/servings for the recipe (optional)
             total_time: New total time for the recipe (optional)
+            org_url: New source/original URL for the recipe (optional). Sets the
+                recipe's "orgURL" field, i.e. the link back to where the recipe
+                came from (e.g. the blog or site it was imported from).
+            image_url: URL of an image to scrape and set as the recipe's image
+                (optional). This is applied via the same image-scraping endpoint
+                used by set_recipe_image_from_url, so it can be combined with
+                other field updates in a single call.
 
         Returns:
             Dict[str, Any]: The updated recipe details.
@@ -233,11 +293,29 @@ def register_recipe_tools(mcp: FastMCP, mealie: MealieFetcher) -> None:
                 recipe_data["recipeYield"] = recipe_yield
             if total_time is not None:
                 recipe_data["totalTime"] = total_time
+            if org_url is not None:
+                recipe_data["orgURL"] = org_url
 
-            if not recipe_data:
+            if not recipe_data and image_url is None:
                 raise ValueError("At least one field must be provided to update")
 
-            return mealie.patch_recipe(slug, recipe_data)
+            result: Dict[str, Any] = {}
+            if recipe_data:
+                result = mealie.patch_recipe(slug, recipe_data)
+
+            if image_url is not None:
+                logger.info(
+                    {
+                        "message": "Setting recipe image from URL as part of patch",
+                        "slug": slug,
+                        "image_url": image_url,
+                    }
+                )
+                mealie.scrape_recipe_image_from_url(slug, image_url)
+                # Re-fetch so the returned payload reflects the new image field.
+                result = mealie.get_recipe(slug)
+
+            return result
         except Exception as e:
             error_msg = f"Error patching recipe '{slug}': {str(e)}"
             logger.error({"message": error_msg})
