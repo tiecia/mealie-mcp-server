@@ -9,9 +9,11 @@ A comprehensive Model Context Protocol (MCP) server that enables AI assistants t
 ### 🍽️ Recipe Management
 - **CRUD Operations**: Create, read, update, patch, duplicate, and delete recipes
 - **Advanced Search**: Filter by text, categories, tags, and tools with AND/OR logic
-- **Image Management**: Upload images or scrape from URLs
+- **Image Management**: Upload images or scrape from URLs, including inline as part of `patch_recipe`
 - **Asset Uploads**: Attach documents and files to recipes
 - **Metadata Tracking**: Mark recipes as made, track last made dates
+- **Source URL**: Set/update a recipe's original source URL (`orgURL`) via `patch_recipe`
+- **Titled Instruction Steps**: Group/label instruction steps (e.g. "For the crust", "For the filling") via `create_recipe`/`update_recipe`
 
 ### 🛒 Shopping Lists
 - **List Management**: Create, update, and delete shopping lists
@@ -115,15 +117,23 @@ Restart Claude Desktop to load the server.
 "Show me all vegetarian dinner recipes"
 ```
 
+### Titled Instruction Steps & Extra Metadata
+
+```
+"Create a recipe with a titled 'For the crust' step and a 'For the filling' step"
+"Set the source URL for my lasagna recipe to https://example.com/lasagna"
+"Update the pie recipe's description and set its image from this URL, in one call"
+```
+
 ## 🎯 Available Tools
 
 ### Recipe Tools (13 operations)
 - `get_recipes` - List/search recipes with advanced filtering
 - `get_recipe_detailed` - Get complete recipe details
 - `get_recipe_concise` - Get recipe summary
-- `create_recipe` - Create new recipe
-- `update_recipe` - Update recipe (full replacement)
-- `patch_recipe` - Update specific fields only
+- `create_recipe` - Create new recipe (instructions may include per-step titles/summaries)
+- `update_recipe` - Update recipe (full replacement; instructions may include per-step titles/summaries)
+- `patch_recipe` - Update specific fields only, including source URL (`org_url`) and image (`image_url`)
 - `duplicate_recipe` - Clone a recipe
 - `mark_recipe_last_made` - Update last made timestamp
 - `set_recipe_image_from_url` - Set image from URL
@@ -243,6 +253,39 @@ When filtering recipes, you **must use slugs or UUIDs**, not display names:
 ```
 
 Use `get_tags()` or `get_categories()` first to find the correct slugs.
+
+### Titled/Grouped Instruction Steps
+
+`create_recipe` and `update_recipe` accept each instruction step as either a
+plain string, or a dict with a required `"text"` key and optional `"title"`/
+`"summary"` keys. This lets you label or group steps (e.g. "For the crust",
+"For the filling") the same way the Mealie UI supports:
+
+```python
+instructions = [
+    "Preheat the oven to 350°F.",
+    {"title": "For the crust", "text": "Mix flour, butter, and salt until crumbly."},
+    {"title": "For the filling", "text": "Whisk eggs, sugar, and vanilla together."},
+]
+```
+
+Plain strings and titled dicts can be freely mixed in the same list; existing
+callers passing only strings continue to work unchanged.
+
+### Setting Source URL and Image via `patch_recipe`
+
+`patch_recipe` now also accepts `org_url` (maps to Mealie's `orgURL` field, the
+link back to the recipe's original source) and `image_url` (scrapes and sets
+the recipe's image, same as `set_recipe_image_from_url`) so both can be
+updated alongside other fields in a single call:
+
+```python
+patch_recipe(
+    slug="chocolate-chewies",
+    org_url="https://www.example.com/recipes/chocolate-chewies",
+    image_url="https://www.example.com/images/chocolate-chewies.jpg",
+)
+```
 
 ### Field Preservation
 

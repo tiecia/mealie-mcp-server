@@ -22,7 +22,7 @@ This document compares the MCP server implementation against the official Mealie
 - ✅ `POST /api/recipes` - Create recipe
 - ✅ `GET /api/recipes/{slug}` - Get recipe details
 - ✅ `PUT /api/recipes/{slug}` - Update recipe (full)
-- ✅ `PATCH /api/recipes/{slug}` - Partial update
+- ✅ `PATCH /api/recipes/{slug}` - Partial update (including `orgURL` via `org_url`, and image scraping via `image_url`)
 - ✅ `DELETE /api/recipes/{slug}` - Delete recipe
 - ✅ `POST /api/recipes/{slug}/duplicate` - Duplicate recipe
 - ✅ `PATCH /api/recipes/{slug}/last-made` - Update last made

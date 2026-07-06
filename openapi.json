@@ -25170,7 +25170,7 @@
             ],
             "title": "Rating"
           },
-          "orgURL": {
+          "org_url": {
             "anyOf": [
               {
                 "type": "string"
@@ -25525,7 +25525,7 @@
             ],
             "title": "Rating"
           },
-          "orgURL": {
+          "org_url": {
             "anyOf": [
               {
                 "type": "string"
@@ -26760,7 +26760,7 @@
             ],
             "title": "Rating"
           },
-          "orgURL": {
+          "org_url": {
             "anyOf": [
               {
                 "type": "string"
