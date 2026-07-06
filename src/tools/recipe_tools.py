@@ -259,9 +259,11 @@ def register_recipe_tools(mcp: FastMCP, mealie: MealieFetcher) -> None:
         description: Optional[str] = None,
         recipe_yield: Optional[str] = None,
         total_time: Optional[str] = None,
-        org_url: Optional[str] = None,
+        orgURL: Optional[str] = None,
         image_url: Optional[str] = None,
     ) -> Dict[str, Any]:
+        # Note: orgURL parameter is accepted to set the original source URL.
+
         """Partially update a recipe (only updates provided fields).
 
         Args:
@@ -293,8 +295,8 @@ def register_recipe_tools(mcp: FastMCP, mealie: MealieFetcher) -> None:
                 recipe_data["recipeYield"] = recipe_yield
             if total_time is not None:
                 recipe_data["totalTime"] = total_time
-            if org_url is not None:
-                recipe_data["orgURL"] = org_url
+            if orgURL is not None:
+                recipe_data["orgURL"] = orgURL
 
             if not recipe_data and image_url is None:
                 raise ValueError("At least one field must be provided to update")
